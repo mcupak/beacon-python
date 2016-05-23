@@ -141,6 +141,11 @@ def query():
 
     # ---- TODO: override with the necessary response details  ----#
 
+    # search for the reference first
+    print(" Do reference search ")
+
+    # search variant set
+
     ############## AlleleResource for response ###############
 
     # required field(s): allele
