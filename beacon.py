@@ -25,8 +25,12 @@ THE SOFTWARE.
 '''
 
 from flask import Flask, jsonify, request
-
-
+import logging
+from beacon2ga4gh import setup_ga4gh_client, check_reference_set, search_variants, fill_beacon
+"""
+If we want to add Oauth2 support then see the code example in this other beacon on top of
+GA4GH example  https://github.com/Genecloud/simplebeacon/blob/master/beacon_rp.py
+"""
 class IncompleteQuery(Exception):
     status_code = 400
 
@@ -52,11 +56,9 @@ app = Flask(__name__)
 
 # --------------- Information endpont (start) --------------------#
 
-# TODO: override with the details of your beacon
-
 ########### DataSetResource for beacon details ############
 
-# required field(s): name
+# required field(s): name    --- is this consent code?
 DataUseRequirementResource = {
     'name': u'example name',
     'description': u'example description'
@@ -92,11 +94,11 @@ DataSetResource = {
 
 # required field(s): allele, chromosome, position, reference
 QueryResource = {
-    'allele': u'allele string',
-    'chromosome': u'chromosome Id',
-    'position': 1,  # integer
-    'reference': u'genome Id',
-    'dataset_id': u'dataset Id'
+    'allele': u'T',
+    'chromosome': u'5',
+    'position': 118405,  # integer
+    'reference': u'NCBI37',
+    'dataset_id': u''
 }
 
 ################### Beacon details #########################
@@ -123,14 +125,13 @@ beacon = {
 # --------------- Information endpoint (end) ----------------------#
 
 # info function
-@app.route('/beacon-python/info', methods=['GET'])
+@app.route('/beacon/info', methods=['GET'])
 def info():
     return jsonify(beacon)
 
 
 # query function
-# TODO: plug in the functionality of your beacon
-@app.route('/beacon-python/query', methods=['GET'])
+@app.route('/beacon/query', methods=['GET'])
 def query():
     # parse query
     chromosome = request.args.get('chrom')
@@ -139,12 +140,14 @@ def query():
     reference = request.args.get('ref')
     dataset = request.args.get('dataset') if 'dataset' in request.args else beacon['datasets'][0]['id']
 
-    # ---- TODO: override with the necessary response details  ----#
+    logging.debug("Query: c= %s, p= %s, a= %s, d= %s", chromosome, position, allele, dataset)
 
     # search for the reference first
-    print(" Do reference search ")
-
+    observedF = 0
     # search variant set
+    check_reference_set(cl, reference) # TODO check the return here
+
+    presence, observedF = search_variants(cl, position, chromosome, allele)
 
     ############## AlleleResource for response ###############
 
@@ -167,7 +170,7 @@ def query():
     # generate response
     # required field(s): exists
     response = {
-        'exists': True,
+        'exists': presence,
         'observed': 0,  # integer, min 0
         'alleles': [
             AlleleResource
@@ -196,7 +199,7 @@ def query():
 
 
 # info function
-@app.route('/beacon-python/', methods=['GET'])
+@app.route('/beacon/', methods=['GET'])
 def welcome():
     return 'WELCOME!!! Beacon of Beacons Project (BoB) provides a unified REST API to publicly available GA4GH Beacons. BoB standardizes the way beacons are accessed and aggregates their results, thus addressing one of the missing parts of the Beacon project itself. BoB was designed with ease of programmatic access in mind. It provides XML, JSON and plaintext responses to accommodate needs of all the clients across all the programming languages. The API to use is determined using the header supplied by the client in its GET request, e.g.: "Accept: application/json".'
 
@@ -213,6 +216,13 @@ def handle_invalid_usage(error):
 def not_found(error):
     return 'Page not found (Bad URL)', 404
 
+def main()
+    logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', filename='gb.log', level=logging.DEBUG)
+    logging.debug('Beacon starting')
+    cl = setup_ga4gh_client()
+    fill_beacon(cl, beacon)
+    app.run()
+
 
 if __name__ == '__main__':
-    app.run()
+    main()
