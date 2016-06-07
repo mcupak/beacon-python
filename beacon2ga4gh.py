@@ -76,69 +76,109 @@ def findAlleleMatch(allele, foundVariant, pos):
     # the variant may start before the address we are searching so figure out
     # where in the string to look
     offset = pos - foundVariant.start
+    whichAlt = 0
     for alt in foundVariant.alternateBases:
         logging.debug("looking for {} in alt string {} at string offset {}".format(allele, alt, offset))
         if alt.startswith("<"):
             continue
         if len(alt) > offset:
             foundHere = (allele == alt[offset])
+            if len(allele) > 1:
+                foundHere |= (allele == alt)
             if foundHere:
                 alleleFound |= foundHere
                 logging.debug("FOUND allele {}".format(allele))
-    return alleleFound
+                return alleleFound, whichAlt   # TODO: only finds the first match
+        whichAlt += 1
+    return alleleFound, whichAlt   # has indexed past the p[oint, only finds the first match
 
-def search_in_variantset(cl, pos, chrom, allele, variantSet):
+
+def search_in_variantset(cl, beaconAlleleRequest, beaconAlleleResponse, variantSet, count):
     """
     This function searches inside a single variant set for the conditions passed in
+    :type beaconAlleleResponse: object
     :param cl: GA4GH Client lib to use
-    :param pos: position opn chromosome to search
-    :param chrom: Which chromosome to search
-    :param allele: Single base to search for
+    :param beaconAlleleRequest: request data structure
+    :param beaconAlleleResponse: response data structure returned
     :param variantSet: variant set to search in
-    :return: nothing, but uses global alleleFound
+    :param count: count of variants that have been found up to this point
+    :return: total count of variants found after this
     """
-    # TODO : this function does not deal with the referenceBases string yet
 
-    # this function does the actual search
-    # fix up chrom
+    pos = beaconAlleleRequest['start']
+    chrom = beaconAlleleRequest['referenceName']
+    # TODO : this function does not deal with the referenceBases string yet
+    # refbases = beaconAlleleRequest['referenceBases']
+    allele = beaconAlleleRequest['alternateBases']
+    multiReply = beaconAlleleRequest['includeDatasetResponse']
+
+    # fix up chrom by removing "chr" if it is there
     if chrom.startswith("chr"):
         chrom = chrom.replace("chr","")
+
     # OK, now search from pos-1 to pos on chrom
-    alleleFound = False  #start every search by setting this to false
     logging.debug("VariantSet.id is {}".format(variantSet.id))
     logging.debug("ReverenceName is {}".format(chrom))
-    for foundVariant in cl.searchVariants(variantSet.id, start=pos, end=pos+1, referenceName=chrom, callSetIds=[]):
+    for foundVariant in cl.searchVariants(variantSet.id, start=pos-1, end=pos, referenceName=chrom):
         logging.debug("Variant names: {}".format(foundVariant.names))
         logging.debug("Start: {}, End: {}".format(foundVariant.start, foundVariant.end))
         logging.debug("Reference bases: {}".format(foundVariant.referenceBases))
         logging.debug("Alternate bases: {}".format(foundVariant.alternateBases))
-        alleleFound = findAlleleMatch(allele, foundVariant, pos)
-        logging.debug(foundVariant)
+        alleleFound, whichAlt = findAlleleMatch(allele, foundVariant, pos)
+        beaconAlleleResponse['exists'] = alleleFound
+        # OK, we found one so check to see if we need to search any more
+        if alleleFound and not multiReply:
+            return
+        # implicit else means that we want to search for more, and we need to fill out this data struct
         if alleleFound:
-            break
-    return alleleFound
+            assert isinstance(foundVariant, object)
+            logging.debug('AF = {}'.format(foundVariant.info))
+            datasetAlleleResponse = {
+                'exists': alleleFound,
+                'callCount': len(foundVariant.calls),
+                'samplecount': len(foundVariant.calls),
+                # TODO : assuming that sampleCount and callCount are the same for now
+                'frequency': foundVariant.info['AF'][whichAlt],
+                'variantCount': 0,
+                'note': '',
+                'info': ''
+            }
+            if len(foundVariant.names) > 0:
+                datasetAlleleResponse['info'] = "variantID: " + foundVariant.names[whichAlt]
+            beaconAlleleResponse['datasetAlleleResponses'].append(datasetAlleleResponse)
 
-def search_variants(cl, BeaconAlleleRequest):
+            logging.debug('Running the multi-reply code, count={}'.format(count))
+            logging.debug('response={}'.format(beaconAlleleResponse['datasetAlleleResponses'][count]))
+            # foundVariant.calls is where we want to search
+            for call in foundVariant.calls:
+                if call.genotype[0]==(whichAlt+1) or call.genotype[1]==(whichAlt+1): #0 entry is for the reference
+                    logging.debug('Count:{} alt:{} call:{}'.format(count, whichAlt, call))
+                    beaconAlleleResponse['datasetAlleleResponses'][count]['note'] += ' ' + call.callSetName
+                    beaconAlleleResponse['datasetAlleleResponses'][count]['variantCount'] += 1
+            count += 1
+    return count
+
+
+def search_variants(cl, BeaconAlleleRequest, BeaconAlleleResponse):
     """
     This function itterates through all the variant sets on the server and calls
         a subfunc to do the actual search in each set found
     :param cl: GA4GH Client lib to use
     :param BeaconAlleleRequest: search data structure
+    :param BeaconAlleleResponse: response structure to fill in
+    :return:
+    """
+    """
     :return: returns the global alleleFound
     """
-    # This function searches all varaiant sets on this server.
-    alleleFound = False  #initialize to False before each series of searches
-
-    # which data set am I supposed to search? should this be passed in to this function
+    # This function searches all variant sets on this server.
+    count = 0 # index into the optional array of return structures
+    # which data set am I supposed to search? should this be passed in to this function?
     dataset = cl.searchDatasets().next()
     logging.debug("dataset %s", dataset)
     for variantSet in cl.searchVariantSets(datasetId=dataset.id):
         logging.debug("---> looping on variant sets, current Name={}".format(variantSet.name))
-        alleleFound = search_in_variantset(cl, BeaconAlleleRequest['start'],
-                                           BeaconAlleleRequest['referenceName'],
-                                           BeaconAlleleRequest['alternateBases'],
-                                           variantSet)
-    return alleleFound
+        count = search_in_variantset(cl, BeaconAlleleRequest, BeaconAlleleResponse, variantSet, count)
 
 
 def fill_beacon(cl, beacon):
@@ -152,6 +192,7 @@ def fill_beacon(cl, beacon):
     global organization
 
     # TODO we should iterate here and fill in all the beacon info about each of the datasets that this server has
+    #       Assuming just one dataset for now
     dataset = cl.searchDatasets().next()
     logging.debug(dataset)
     beacon['id'] = dataset.name
@@ -166,3 +207,4 @@ def fill_beacon(cl, beacon):
     # Check the reference set match, do we need to search for it?
     referenceSet = cl.searchReferenceSets().next()
     logging.debug(referenceSet)
+

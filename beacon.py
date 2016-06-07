@@ -57,7 +57,7 @@ BeaconAlleleRequest = {
     'alternateBases': u'',
     'assemblyId': '',
     'datasetIds': [],
-    'includeDatasetResponse': u'',
+    'includeDatasetResponse': True,
 }
 
 BeaconDataset = {
@@ -114,9 +114,6 @@ BeaconDatasetAlleleResponse = {
     'datasetId': u'',
     'exists': u'',
     'error': u'',
-    'alleleRequest': [
-        BeaconAlleleRequest
-    ],
     'frequency': u'',
     'variantCount': -1,
     'callCount': -1,
@@ -134,7 +131,7 @@ BeaconAlleleResponse = {
         BeaconAlleleRequest
     ],
     'datasetAlleleResponses': [
-        BeaconDatasetAlleleResponse
+        #BeaconDatasetAlleleResponse
     ]
 }
 
@@ -167,8 +164,7 @@ def query():
     BeaconAlleleRequest['referenceBases'] = request.args.get('referenceBases')
     BeaconAlleleRequest['alternateBases'] = request.args.get('alternateBases')
     BeaconAlleleRequest['assemblyId'] = request.args.get('assemblyId')
-    BeaconAlleleRequest['includeDatasetResponse'] = request.args.get('includeDatasetResponse')
-    # TODO : make use of the includeDatasetResponses field
+    #BeaconAlleleRequest['includeDatasetResponse'] = request.args.get('includeDatasetResponse')
 
     logging.debug(BeaconAlleleRequest)
 
@@ -180,7 +176,10 @@ def query():
         raise IncompleteQuery('IncompleteQuery', status_code=410, ErrorResource=ErrorResource, query=BeaconAlleleRequest,
                               beacon_id=Beacon["id"])
 
-    BeaconAlleleResponse['exists'] = search_variants(cl, BeaconAlleleRequest)
+    # make sure the array is cleared before each call to the search
+    BeaconAlleleResponse['datasetAlleleResponses'] = []
+    logging.debug('Starting with resonse{}'.format(BeaconAlleleResponse))
+    search_variants(cl, BeaconAlleleRequest, BeaconAlleleResponse)
 
     if BeaconAlleleRequest['referenceName'] is None \
             or BeaconAlleleRequest['start'] is None \
