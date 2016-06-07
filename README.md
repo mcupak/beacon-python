@@ -40,3 +40,4 @@ Query example:
 
 ##Technologies
 Python, Flask.
+# Beacon-on-GA4GH-API
