@@ -25,27 +25,44 @@ THE SOFTWARE.
 '''
 
 from flask import Flask, jsonify, request
-import logging
-from beacon2ga4gh import setup_ga4gh_client, check_reference_set, search_variants, fill_beacon
 
-"""
-If we want to add Oauth2 support then see the code example in this other beacon on top of
-GA4GH example  https://github.com/Genecloud/simplebeacon/blob/master/beacon_rp.py
-"""
+
+class IncompleteQuery(Exception):
+    status_code = 400
+
+    def __init__(self, message, status_code=None, payload=None, ErrorResource=None, query=None, beacon_id=None):
+        Exception.__init__(self)
+        self.message = message
+        if status_code is not None:
+            self.status_code = status_code
+        self.payload = payload
+        self.ErrorResource = ErrorResource
+        self.query = query
+        self.beacon_id = beacon_id
+
+    def to_dict(self):
+        rv = dict(self.payload or ())
+        rv["beacon"] = self.beacon_id
+        rv["query"] = self.query
+        rv['error'] = self.ErrorResource
+        return rv
+
 
 app = Flask(__name__)
-#global GA4GH client lib
-cl=""
+
+# --------------- Information endpont (start) --------------------#
+
+# TODO: override with the details of your beacon
 
 ########### QueryResource for beacon details ###############
 
 # required field(s): allele, chromosome, position, reference
 QueryResource = {
-    "allele": "A",
-    "chromosome": "chr17",
-    "position": 35098007,
-    "reference": "NCBI37",
-    'dataset_id': ""
+    "allele": '',
+    "chromosome": '',
+    "position": 0,
+    "reference": '',
+    'dataset_id': ''
 }
 
 ################### Beacon details #########################
@@ -57,17 +74,17 @@ BeaconAlleleRequest = {
     'alternateBases': u'',
     'assemblyId': '',
     'datasetIds': [],
-    'includeDatasetResponse': True,
+    'includeDatasetResponse': False,
 }
 
 BeaconDataset = {
-    'id': u'1kgenomes',
-    'name': u'1000Genomes',
-    'description': u'Variants from the 1000 Genomes project and GENCODE genes annotations',
-    'assemblyId': u'NCBI37',
+    'id': u'',
+    'name': u'',
+    'description': u'',
+    'assemblyId': u'',
     'createDateTime': u'',
     'updateDateTime': u'',
-    'version':u'0.1',   #version of the beacon
+    'version':u'',   #version of the beacon
     'variantCount': -1,
     'callCount': -1,
     'sampleCount': -1,
@@ -76,12 +93,12 @@ BeaconDataset = {
 }
 
 BeaconOrganization = {
-    'id': u'Sanger',
-    'name': u'Sanger Institute',
+    'id': u'',
+    'name': u'',
     'apiVersion': u'0.3',
     'description': u'',
     'address': u'',
-    'welcomeUrl': u'http://www.1000genomes.org',
+    'welcomeUrl': u'',
     'contactUrl': u'',
     'logoUrl': u'',
     'info': u''
@@ -89,15 +106,15 @@ BeaconOrganization = {
 
 # required field(s): id, name, organization, api
 Beacon = {
-    'id': u'1000Genomes',
-    'name': u'1000Genomes',
+    'id': u'',
+    'name': u'',
     'apiVersion': u'0.3',
     'BeaconOrganization': [
         BeaconOrganization
         ],
-    'description': u'Variants from the 1000 Genomes project and GENCODE genes annotations',
-    'version':u'0.1',   #version of the beacon
-    'welconeUrl': u'http://1kgenomes.ga4gh.org',
+    'description': u'',
+    'version':u'',   #version of the beacon
+    'welconeUrl': u'',
     'alternativeUrl': u'',
     'createDateTime': u'',
     'updateDateTime': u'',
@@ -139,25 +156,15 @@ BeaconAlleleResponse = {
 # --------------- Information endpoint (end) ----------------------#
 
 # info function
-@app.route('/beacon/info', methods=['GET'])
+@app.route('/beacon-python/info', methods=['GET'])
 def info():
     return jsonify(Beacon)
 
 
 # query function
-@app.route('/beacon/query', methods=['GET'])
+# TODO: plug in the functionality of your beacon
+@app.route('/beacon-python/query', methods=['GET'])
 def query():
-    global cl
-
-
-    ############# ErrorResource for response #################
-
-    # required field(s): name
-    ErrorResource = {
-        'name': u'error name/code',
-        'description': u'error message'
-    }
-
     # parse query
     BeaconAlleleRequest['referenceName'] = request.args.get('referenceName')
     BeaconAlleleRequest['start'] = long(request.args.get('start'))
@@ -166,20 +173,7 @@ def query():
     BeaconAlleleRequest['assemblyId'] = request.args.get('assemblyId')
     #BeaconAlleleRequest['includeDatasetResponse'] = request.args.get('includeDatasetResponse')
 
-    logging.debug(BeaconAlleleRequest)
-
-    # search for the reference first
-    # search variant set
-    if not check_reference_set(cl, BeaconAlleleRequest['assemblyId']):
-        ErrorResource['description'] = 'Unknown assembly ID'
-        ErrorResource['name'] = 'Incomplete Query'
-        raise IncompleteQuery('IncompleteQuery', status_code=410, ErrorResource=ErrorResource, query=BeaconAlleleRequest,
-                              beacon_id=Beacon["id"])
-
-    # make sure the array is cleared before each call to the search
-    BeaconAlleleResponse['datasetAlleleResponses'] = []
-    logging.debug('Starting with resonse{}'.format(BeaconAlleleResponse))
-    search_variants(cl, BeaconAlleleRequest, BeaconAlleleResponse)
+    # ---- TODO: override with the necessary response details  ----#
 
     if BeaconAlleleRequest['referenceName'] is None \
             or BeaconAlleleRequest['start'] is None \
@@ -191,36 +185,14 @@ def query():
                                   beacon_id=Beacon["id"])
 
     # --------------------------------------------------------------#
-    # fill in the rest of the response:
-    BeaconAlleleResponse['beaconId'] = Beacon['id']
+
     return jsonify({"response": BeaconAlleleResponse, "beacon": Beacon['id']})
 
-class IncompleteQuery(Exception):
-    status_code = 400
-
-    def __init__(self, message, status_code=None, payload=None, ErrorResource=None, query=None, beacon_id=None):
-        Exception.__init__(self)
-        self.message = message
-        if status_code is not None:
-            self.status_code = status_code
-        self.payload = payload
-        self.ErrorResource = ErrorResource
-        self.query = BeaconAlleleRequest
-        self.beacon_id = Beacon['id']
-
-    def to_dict(self):
-        rv = dict(self.payload or ())
-        rv["beacon"] = Beacon
-        rv["query"] = BeaconAlleleRequest
-        rv['error'] = self.ErrorResource
-        return rv
 
 # info function
-@app.route('/beacon/', methods=['GET'])
+@app.route('/beacon-python/', methods=['GET'])
 def welcome():
-    welcome_message = "Welcome to the Beacon service for the 1000 Genomes GA4GH server. Here is a sample query that can be made against this server (schema version 0.3)."
-    url="http://127.0.0.1:5000/beacon/query?referenceName=chr17&start=35098007&alternateBases=A&assemblyId=NCBI37"
-    return jsonify({"Greeting": welcome_message, "QueryResource": QueryResource, "URL": url})
+    return 'WELCOME!!! Beacon of Beacons Project (BoB) provides a unified REST API to publicly available GA4GH Beacons. BoB standardizes the way beacons are accessed and aggregates their results, thus addressing one of the missing parts of the Beacon project itself. BoB was designed with ease of programmatic access in mind. It provides XML, JSON and plaintext responses to accommodate needs of all the clients across all the programming languages. The API to use is determined using the header supplied by the client in its GET request, e.g.: "Accept: application/json".'
 
 
 # required parameters missing
@@ -235,15 +207,6 @@ def handle_invalid_usage(error):
 def not_found(error):
     return 'Page not found (Bad URL)', 404
 
-def main():
-    global cl
-
-    logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', filename='gb.log', level=logging.DEBUG)
-    logging.debug('Beacon starting')
-    cl = setup_ga4gh_client()
-    fill_beacon(cl, Beacon)
-    app.run()
-
 
 if __name__ == '__main__':
-    main()
+    app.run()
