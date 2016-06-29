@@ -93,7 +93,7 @@ BeaconDatasetAlleleResponse = {
     'datasetId': u'',  # required
     'exists': True,  # optional (required in no-error cases)
     'error': None,  # optional (required in case of an error)
-    'frequency': u'',  # optional
+    'frequency': 1.0,  # optional
     'variantCount': 1,  # optional
     'callCount': 1,  # optional
     'sampleCount': 1,  # optional
@@ -123,7 +123,7 @@ def info():
 # query function
 # TODO: plug in the functionality of your beacon (see https://github.com/ga4gh/beacon-team/ for more details)
 @app.route('/beacon-python/query', methods=['GET'])
-def query():
+def queryOverGet():
     # parse query
     BeaconAlleleRequest['referenceName'] = request.args.get('referenceName')
     BeaconAlleleRequest['start'] = int(request.args.get('start'))
@@ -132,6 +132,14 @@ def query():
     BeaconAlleleRequest['assemblyId'] = request.args.get('assemblyId')
     BeaconAlleleRequest['datasetIds'] = request.args.getlist('datasetIds')
     BeaconAlleleRequest['includeDatasetResponses'] = bool(request.args.get('includeDatasetResponses'))
+
+    return jsonify(BeaconAlleleResponse)
+
+
+@app.route('/beacon-python/query', methods=['POST'])
+def queryOverPost():
+    # parse query
+    body = request.json
 
     return jsonify(BeaconAlleleResponse)
 
