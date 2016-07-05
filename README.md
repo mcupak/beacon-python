@@ -1,4 +1,4 @@
-#Python Beacon
+#Python Beacon Development Kit (PBDK) [![GitHub license](https://img.shields.io/badge/license-mit-blue.svg)](https://raw.githubusercontent.com/mcupak/beacon-python/develop/LICENSE)
 
 ##Contents
 
