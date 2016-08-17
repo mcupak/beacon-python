@@ -67,11 +67,11 @@ BeaconOrganization = {
 Beacon = {
     'id': u'',  # required
     'name': u'',  # required
-    'apiVersion': u'0.3',  # required
+    'apiVersion': u'0.3.0',  # required
     'organization': BeaconOrganization,  # required
     'description': u'',  # optional
     'version': u'',  # optional
-    'welconeUrl': u'',  # optional
+    'welcomeUrl': u'',  # optional
     'alternativeUrl': u'',  # optional
     'createDateTime': u'',  # optional
     'updateDateTime': u'',  # optional
